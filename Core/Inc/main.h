@@ -67,12 +67,12 @@ void Error_Handler(void);
 #define SCREEN_DC_GPIO_Port GPIOB
 #define SCREEN_RST_Pin GPIO_PIN_12
 #define SCREEN_RST_GPIO_Port GPIOB
-#define TOF1_XSHUT_Pin GPIO_PIN_13
-#define TOF1_XSHUT_GPIO_Port GPIOB
-#define TOF2_XSHUT_Pin GPIO_PIN_14
-#define TOF2_XSHUT_GPIO_Port GPIOB
-#define TOF3_XSHUT_Pin GPIO_PIN_15
-#define TOF3_XSHUT_GPIO_Port GPIOB
+#define XSHUT_RIGHT_Pin GPIO_PIN_10
+#define XSHUT_RIGHT_GPIO_Port GPIOA
+#define XSHUT_LEFT_Pin GPIO_PIN_11
+#define XSHUT_LEFT_GPIO_Port GPIOA
+#define XSHUT_CENTER_Pin GPIO_PIN_12
+#define XSHUT_CENTER_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 

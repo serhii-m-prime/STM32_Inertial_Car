@@ -27,7 +27,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "sh1107.h"
+#include "debug_ui.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -99,14 +100,32 @@ int main(void)
   MX_TIM4_Init();
   MX_USART2_UART_Init();
   MX_I2C1_Init();
+  MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
 
+  SH1107_Init();
+  DebugUI_Init();
+  int fake_battery = 15;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	DebugUI_Clear();
+
+	DebugUI_PrintLine(0, "ELRS: WAIT");
+	DebugUI_PrintLine(1, "IMU : OFFLINE");
+	DebugUI_PrintLine(2, "BATTERY: %d%%", fake_battery);
+
+	DebugUI_ProgressBar(0, 24, 128, 8, fake_battery);
+
+	DebugUI_Show();
+
+	fake_battery++;
+	if(fake_battery > 100) fake_battery = 0;
+
+	HAL_Delay(100);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

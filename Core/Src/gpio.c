@@ -51,11 +51,10 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(IMU_CS_GPIO_Port, IMU_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, IMU_CS_Pin|XSHUT_RIGHT_Pin|XSHUT_LEFT_Pin|XSHUT_CENTER_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, SCREEN_CS_Pin|SCREEN_DC_Pin|SCREEN_RST_Pin|TOF1_XSHUT_Pin
-                          |TOF2_XSHUT_Pin|TOF3_XSHUT_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, SCREEN_CS_Pin|SCREEN_DC_Pin|SCREEN_RST_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : IMU_INT_Pin */
   GPIO_InitStruct.Pin = IMU_INT_Pin;
@@ -63,17 +62,15 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(IMU_INT_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : IMU_CS_Pin */
-  GPIO_InitStruct.Pin = IMU_CS_Pin;
+  /*Configure GPIO pins : IMU_CS_Pin XSHUT_RIGHT_Pin XSHUT_LEFT_Pin XSHUT_CENTER_Pin */
+  GPIO_InitStruct.Pin = IMU_CS_Pin|XSHUT_RIGHT_Pin|XSHUT_LEFT_Pin|XSHUT_CENTER_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(IMU_CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SCREEN_CS_Pin SCREEN_DC_Pin SCREEN_RST_Pin TOF1_XSHUT_Pin
-                           TOF2_XSHUT_Pin TOF3_XSHUT_Pin */
-  GPIO_InitStruct.Pin = SCREEN_CS_Pin|SCREEN_DC_Pin|SCREEN_RST_Pin|TOF1_XSHUT_Pin
-                          |TOF2_XSHUT_Pin|TOF3_XSHUT_Pin;
+  /*Configure GPIO pins : SCREEN_CS_Pin SCREEN_DC_Pin SCREEN_RST_Pin */
+  GPIO_InitStruct.Pin = SCREEN_CS_Pin|SCREEN_DC_Pin|SCREEN_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
