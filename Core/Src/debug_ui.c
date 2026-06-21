@@ -21,7 +21,7 @@ void DebugUI_Clear(void) {
 }
 
 void DebugUI_Show(void) {
-    SH1107_UpdateScreen();
+	SH1107_UpdateScreen_NonBlocking();
 }
 
 static void Font_DrawChar(uint8_t x, uint8_t y, char c) {
@@ -86,6 +86,37 @@ void DebugUI_ProgressBar(uint8_t x, uint8_t y, uint8_t width, uint8_t height, ui
     for (uint8_t i = 0; i < fill_width; i++) {
         for (uint8_t j = 0; j < inner_height; j++) {
             SH1107_DrawPixel(x + 2 + i, y + 2 + j, 1);
+        }
+    }
+}
+
+void DebugUI_StickSlider(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint16_t value) {
+    if (value < 1000) value = 1000;
+    if (value > 2000) value = 2000;
+
+    for (uint8_t i = 0; i < width; i++) {
+        SH1107_DrawPixel(x + i, y, 1);
+        SH1107_DrawPixel(x + i, y + height - 1, 1);
+    }
+    for (uint8_t j = 0; j < height; j++) {
+        SH1107_DrawPixel(x, y + j, 1);
+        SH1107_DrawPixel(x + width - 1, y + j, 1);
+    }
+
+    uint8_t center_x = x + (width / 2);
+    for (uint8_t j = 0; j < height; j++) {
+        if (j % 2 == 0) SH1107_DrawPixel(center_x, y + j, 1);
+    }
+
+    uint8_t inner_width = width - 2;
+    uint8_t stick_px = x + 1 + ((uint32_t)(value - 1000) * inner_width) / 1000;
+
+    for (int8_t i = -1; i <= 1; i++) {
+        int16_t draw_x = stick_px + i;
+        if (draw_x > x && draw_x < x + width - 1) {
+            for (uint8_t j = 1; j < height - 1; j++) {
+                SH1107_DrawPixel((uint8_t)draw_x, y + j, 1);
+            }
         }
     }
 }

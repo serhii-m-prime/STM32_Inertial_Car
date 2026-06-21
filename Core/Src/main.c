@@ -137,8 +137,8 @@ int main(void)
 	  CRSF_UpdateFailsafe(HAL_GetTick());
 	  //RC_ProcessCalibration();
 
-	  // 2. NON-BLOCKING UI RENDER (25 FPS)
-	  if (HAL_GetTick() - last_ui_update >= 300) {
+	  // 2. NON-BLOCKING DEBUG UI RENDER
+	  if (0 && HAL_GetTick() - last_ui_update >= 100) {
 		  // GATE CHECK: Only modify and send buffer if previous transfer is 100% complete rccarstm32
 		  if (!SH1107_IsBusy()) {
 			  last_ui_update = HAL_GetTick();
@@ -153,9 +153,7 @@ int main(void)
 				  DebugUI_PrintLine(0, "! STICK ERROR !");
 				  DebugUI_PrintLine(1, "CENTER STICKS!");
 			  } else if (rc_sys_state == RC_STATE_READY) {
-				  DebugUI_PrintLine(0, "LQ:%d%% %ddBm",
-				                                    crsf.link_quality,
-				                                    crsf.rssi_dbm);
+				  DebugUI_PrintLine(0, "LQ:%d%% %ddBm", crsf.link_quality, crsf.rssi_dbm);
 
 				  // Get perfectly smoothed & safe values
 				  uint16_t thr = RC_GetProcessed(CRSF_MAP_THROTTLE);

@@ -13,4 +13,7 @@ void DebugUI_PrintLine(uint8_t line, const char* format, ...);
 /* Draw a progress bar */
 void DebugUI_ProgressBar(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint8_t percentage);
 
+/* Draw controller signal position*/
+void DebugUI_StickSlider(uint8_t x, uint8_t y, uint8_t width, uint8_t height, uint16_t value);
+
 #endif // DEBUG_UI_H

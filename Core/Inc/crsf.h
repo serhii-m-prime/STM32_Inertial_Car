@@ -4,27 +4,26 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Мапінг каналів */
+// Channel map
 #define CRSF_MAP_STEERING    0
 #define CRSF_MAP_THROTTLE    1
 #define CRSF_MAP_DIR_SWITCH  4
 #define CRSF_MAP_RTH_SWITCH  5
 
-/* Типи пакетів протоколу CRSF */
-#define CRSF_SYNC_BYTE                 0xC8
+/* CRSF packs types */
+#define CRSF_START_BYTE                0xC8
 #define CRSF_FRAMETYPE_RC              0x16
 #define CRSF_FRAMETYPE_LINK_STATISTICS 0x14
 
-#define CRSF_FAILSAFE_TIME             300 // мс до повної зупинки
+#define CRSF_FAILSAFE_TIME             10000
 
 typedef struct {
     uint16_t raw_channels[16];
-    uint32_t last_packet_time;
-    bool is_connected;           // Залишаємо як прапорець апаратного Failsafe
+    uint32_t last_valid_frame_time;
+    bool is_connected;
 
-    // --- НОВІ МЕТРИКИ ЗВ'ЯЗКУ ---
-    uint8_t link_quality;        // Відсоток успішних пакетів (0 - 100%)
-    int8_t  rssi_dbm;            // Потужність сигналу (наприклад, -85 dBm)
+    uint8_t link_quality; // LQ
+    int8_t  rssi_dbm;     // RSSI
 } CRSF_State_t;
 
 extern CRSF_State_t crsf;
