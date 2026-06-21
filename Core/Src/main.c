@@ -138,7 +138,7 @@ int main(void)
 	  //RC_ProcessCalibration();
 
 	  // 2. NON-BLOCKING DEBUG UI RENDER
-	  if (0 && HAL_GetTick() - last_ui_update >= 100) {
+	  if (HAL_GetTick() - last_ui_update >= 100) {
 		  // GATE CHECK: Only modify and send buffer if previous transfer is 100% complete rccarstm32
 		  if (!SH1107_IsBusy()) {
 			  last_ui_update = HAL_GetTick();

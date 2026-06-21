@@ -6,9 +6,9 @@
 
 // Channel map
 #define CRSF_MAP_STEERING    0
-#define CRSF_MAP_THROTTLE    1
-#define CRSF_MAP_DIR_SWITCH  4
-#define CRSF_MAP_RTH_SWITCH  5
+#define CRSF_MAP_THROTTLE    2
+#define CRSF_MAP_DIR_SWITCH  6
+#define CRSF_MAP_RTH_SWITCH  7
 
 /* CRSF packs types */
 #define CRSF_START_BYTE                0xC8
