@@ -29,6 +29,8 @@
 /* USER CODE BEGIN Includes */
 #include "sh1107.h"
 #include "debug_ui.h"
+#include "crsf.h"
+#include "rc_filter.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,6 +62,12 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+// Variables for DWT Profiling
+uint32_t last_ui_update = 0;
+uint32_t max_loop_time_us = 0;
+uint32_t current_cycles = 0;
+uint32_t current_loop_us = 0;
 
 /* USER CODE END 0 */
 
@@ -105,32 +113,86 @@ int main(void)
 
   SH1107_Init();
   DebugUI_Init();
-  int fake_battery = 15;
+  CRSF_Init();
+  RC_Filter_Init();
+
+  // Enable DWT Counter for nanosecond precision profiling
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+  uint32_t mcu_freq_mhz = HAL_RCC_GetHCLKFreq() / 1000000;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
   while (1)
   {
-	DebugUI_Clear();
+	  uint32_t loop_start_cycle = DWT->CYCCNT;
 
-	DebugUI_PrintLine(0, "ELRS: WAIT");
-	DebugUI_PrintLine(1, "IMU : OFFLINE");
-	DebugUI_PrintLine(2, "BATTERY: %d%%", fake_battery);
+	  // 1. UPDATE CRSF STATE MACHINE
+	  CRSF_Update();
+	  CRSF_UpdateFailsafe(HAL_GetTick());
+	  //RC_ProcessCalibration();
 
-	DebugUI_ProgressBar(0, 24, 128, 8, fake_battery);
+	  // 2. NON-BLOCKING UI RENDER (25 FPS)
+	  if (HAL_GetTick() - last_ui_update >= 300) {
+		  // GATE CHECK: Only modify and send buffer if previous transfer is 100% complete rccarstm32
+		  if (!SH1107_IsBusy()) {
+			  last_ui_update = HAL_GetTick();
+			  DebugUI_Clear();
 
-	DebugUI_Show();
+			  // Print FSM Status
+			  if (rc_sys_state == RC_STATE_WAITING) {
+				  DebugUI_PrintLine(0, "WAITING FOR ELRS...");
+			  } else if (rc_sys_state == RC_STATE_CALIBRATING) {
+				  DebugUI_PrintLine(0, "CALIBRATING STICKS...");
+			  } else if (rc_sys_state == RC_STATE_ERROR) {
+				  DebugUI_PrintLine(0, "! STICK ERROR !");
+				  DebugUI_PrintLine(1, "CENTER STICKS!");
+			  } else if (rc_sys_state == RC_STATE_READY) {
+				  DebugUI_PrintLine(0, "LQ:%d%% %ddBm",
+				                                    crsf.link_quality,
+				                                    crsf.rssi_dbm);
 
-	fake_battery++;
-	if(fake_battery > 100) fake_battery = 0;
+				  // Get perfectly smoothed & safe values
+				  uint16_t thr = RC_GetProcessed(CRSF_MAP_THROTTLE);
+				  uint16_t str = RC_GetProcessed(CRSF_MAP_STEERING);
+				  uint16_t dir = RC_GetProcessed(CRSF_MAP_DIR_SWITCH);
+				  uint16_t rth = RC_GetProcessed(CRSF_MAP_RTH_SWITCH);
 
-	HAL_Delay(100);
-    /* USER CODE END WHILE */
+				  DebugUI_PrintLine(2, "THR: %d", thr);
+				  DebugUI_StickSlider(0, 26, 128, 10, thr);
 
-    /* USER CODE BEGIN 3 */
+				  DebugUI_PrintLine(4, "STR: %d", str);
+				  DebugUI_StickSlider(0, 42, 128, 10, str);
+
+				  if (dir > 1700) DebugUI_PrintLine(7, "DIR: FORWARD");
+				  else if (dir < 1300) DebugUI_PrintLine(7, "DIR: REVERSE");
+				  else DebugUI_PrintLine(7, "DIR: NEUTRAL");
+
+				  if (rth < 1300) DebugUI_PrintLine(9, "RTH: OFF");
+				  else if (rth <= 1700) DebugUI_PrintLine(9, "RTH: DIRECT");
+				  else DebugUI_PrintLine(9, "RTH: BACKTRACE");
+			  }
+
+			  DebugUI_PrintLine(15, "Loop %d max %d", current_loop_us, max_loop_time_us);
+
+			  DebugUI_Show();
+		  }
+		  max_loop_time_us = 0;
+	  }
+
+	  // 3. PROFILING (Calculate loop time in microseconds)
+	  current_cycles = DWT->CYCCNT - loop_start_cycle;
+	  current_loop_us = current_cycles / mcu_freq_mhz;
+	  if (current_loop_us > max_loop_time_us) {
+		  max_loop_time_us = current_loop_us;
+	  }
+	  /* USER CODE END 3 */
   }
-  /* USER CODE END 3 */
 }
 
 /**
@@ -179,6 +241,36 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+// !!! This triggers when a full CRSF packet arrives via DMA
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
+    if (hspi->Instance == SPI1) {
+        // Push the screen state machine forward asynchronously
+        SH1107_FSM_Step();
+    }
+}
+
+//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
+//    if (huart->Instance == USART2) {
+//        // Atomic section protection: temporarily freeze interrupts during buffer copies
+//        // This prevents the main loop from reading corrupted partial data
+//        __disable_irq();
+//        extern uint8_t crsf_rx_buffer[];
+//        CRSF_ParseBuffer(crsf_rx_buffer, Size);
+//        __enable_irq();
+//
+//        HAL_UARTEx_ReceiveToIdle_DMA(&huart2, crsf_rx_buffer, 64);
+//    }
+//}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART2) {
+        // Prevent permanent DMA lock up caused by Overrun Errors (ORE)
+        HAL_UART_AbortReceive(huart);
+        extern uint8_t crsf_rx_buffer[];
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart2, crsf_rx_buffer, 64);
+    }
+}
 
 /* USER CODE END 4 */
 
