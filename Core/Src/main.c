@@ -274,19 +274,6 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
     }
 }
 
-//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
-//    if (huart->Instance == USART2) {
-//        // Atomic section protection: temporarily freeze interrupts during buffer copies
-//        // This prevents the main loop from reading corrupted partial data
-//        __disable_irq();
-//        extern uint8_t crsf_rx_buffer[];
-//        CRSF_ParseBuffer(crsf_rx_buffer, Size);
-//        __enable_irq();
-//
-//        HAL_UARTEx_ReceiveToIdle_DMA(&huart2, crsf_rx_buffer, 64);
-//    }
-//}
-
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART2) {
         // Prevent permanent DMA lock up caused by Overrun Errors (ORE)

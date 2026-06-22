@@ -14,7 +14,7 @@ void RC_Input_Init(void) {
     }
 
     /* Configure customized DSP profiles for steering and throttle channels */
-    Signal_InitFilter(&filters[CRSF_MAP_STEERING], 1500, 15, 0.25f, CHAN_CENTERED);
+    Signal_InitFilter(&filters[CRSF_MAP_STEERING], 1500, 15, 0.15f, CHAN_CENTERED);
     Signal_InitFilter(&filters[CRSF_MAP_THROTTLE], 1000, 15, 0.25f, CHAN_BOTTOM_ANCHORED);
 
     /* Configure digital switch channels with zero deadband and direct mapping */

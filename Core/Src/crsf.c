@@ -71,7 +71,7 @@ void CRSF_Init(void) {
     for (int i=0; i<16; i++) crsf.raw_channels[i] = 992;
 
     __HAL_UART_CLEAR_OREFLAG(&huart2);
-    HAL_UART_Receive_DMA(&huart2, crsf_rx_buffer, RX_BUFFER_SIZE);
+    HAL_UART_Receive_DMA(&huart2, (uint8_t *)crsf_rx_buffer, RX_BUFFER_SIZE);
 }
 
 void CRSF_UpdateFailsafe(uint32_t current_time_ms) {

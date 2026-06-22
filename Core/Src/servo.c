@@ -7,9 +7,11 @@ void Servo_Init(void) {
 }
 
 void Servo_SetPulse(uint16_t pulse_us) {
-    /* Restrict pulse values to protect physical steering linkage from binding */
-    if (pulse_us < 1000) pulse_us = 1000;
-    if (pulse_us > 2000) pulse_us = 2000;
+    int32_t deviation = (int32_t)pulse_us - 1500;
+    int32_t scaled_pulse = 1500 + ((deviation * 14) / 10);
 
-    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, pulse_us);
+    if (scaled_pulse < 800)  scaled_pulse = 800;
+    if (scaled_pulse > 2200) scaled_pulse = 2200;
+
+    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, (uint16_t)scaled_pulse);
 }
