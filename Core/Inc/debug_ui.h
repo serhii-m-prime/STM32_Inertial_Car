@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define UI_REFRESH_INTERVAL_MS 40
+
 void DebugUI_Init(void);
 void DebugUI_Clear(void);
 void DebugUI_Show(void);

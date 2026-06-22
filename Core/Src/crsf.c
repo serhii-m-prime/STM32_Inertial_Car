@@ -99,7 +99,8 @@ static void CRSF_UnpackChannels(uint8_t* payload) {
     }
 }
 
-static void CRSF_ParseByte(uint8_t b) {
+static bool CRSF_ParseByte(uint8_t b) {
+	bool rc_frame_ready = false;
     switch (parser_state) {
         case CRSF_STATE_SYNC:
             if (b == CRSF_START_BYTE) {
@@ -136,6 +137,7 @@ static void CRSF_ParseByte(uint8_t b) {
                         CRSF_UnpackChannels(&frame_buf[3]);
                         crsf.last_valid_frame_time = HAL_GetTick();
                         crsf.is_connected = true;
+                        rc_frame_ready = true;
                     }
                     // LQ
                     else if (type == CRSF_FRAMETYPE_LINK_STATISTICS) {
@@ -155,9 +157,10 @@ static void CRSF_ParseByte(uint8_t b) {
             }
             break;
     }
+    return rc_frame_ready;
 }
 
-void CRSF_Update(void) {
+bool CRSF_Update(void) {
 	if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_ORE)) {
 	    __HAL_UART_CLEAR_OREFLAG(&huart2);
 	}
@@ -165,11 +168,18 @@ void CRSF_Update(void) {
 	uint16_t rx_head = RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart2.hdmarx);
     if (rx_head >= RX_BUFFER_SIZE) rx_head = 0;
 
+    bool any_rc_frame_parsed = false;
+
     while (rx_tail != rx_head) {
-        CRSF_ParseByte(crsf_rx_buffer[rx_tail]);
+        /* If at least one byte completes a valid RC frame, raise the flag */
+		if (CRSF_ParseByte(crsf_rx_buffer[rx_tail])) {
+			any_rc_frame_parsed = true;
+		}
         rx_tail++;
         if (rx_tail >= RX_BUFFER_SIZE) rx_tail = 0;
     }
+
+    return any_rc_frame_parsed;
 }
 
 uint16_t CRSF_GetPWM(uint8_t channel_index) {

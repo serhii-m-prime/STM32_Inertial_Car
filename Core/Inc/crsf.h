@@ -29,7 +29,7 @@ typedef struct {
 extern CRSF_State_t crsf;
 
 void CRSF_Init(void);
-void CRSF_Update(void);
+bool CRSF_Update(void);
 void CRSF_UpdateFailsafe(uint32_t current_time_ms);
 uint16_t CRSF_GetPWM(uint8_t channel_index);
 

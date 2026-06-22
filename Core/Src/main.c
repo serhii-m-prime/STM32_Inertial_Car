@@ -30,7 +30,7 @@
 #include "sh1107.h"
 #include "debug_ui.h"
 #include "crsf.h"
-#include "rc_filter.h"
+#include "main_fsm.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -114,7 +114,7 @@ int main(void)
   SH1107_Init();
   DebugUI_Init();
   CRSF_Init();
-  RC_Filter_Init();
+  MainFSM_Init();
 
   // Enable DWT Counter for nanosecond precision profiling
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
@@ -127,72 +127,89 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+while (1)
+{
+  uint32_t loop_start_cycle = DWT->CYCCNT;
 
-  while (1)
-  {
-	  uint32_t loop_start_cycle = DWT->CYCCNT;
+  // SYSTEM LAYERS TIMESTEP UPDATE
+  /* Capture the boolean event flag from the low-level parser */
+  bool new_rc_data = CRSF_Update();
 
-	  // 1. UPDATE CRSF STATE MACHINE
-	  CRSF_Update();
-	  CRSF_UpdateFailsafe(HAL_GetTick());
-	  //RC_ProcessCalibration();
+  /* Failsafe timer checker must run continuously without gating */
+  CRSF_UpdateFailsafe(HAL_GetTick());
 
-	  // 2. NON-BLOCKING DEBUG UI RENDER
-	  if (HAL_GetTick() - last_ui_update >= 100) {
-		  // GATE CHECK: Only modify and send buffer if previous transfer is 100% complete rccarstm32
-		  if (!SH1107_IsBusy()) {
-			  last_ui_update = HAL_GetTick();
-			  DebugUI_Clear();
+  /* Pass the frame arrival event flag directly into Layer 3 Supervisor */
+  MainFSM_Update(new_rc_data);
 
-			  // Print FSM Status
-			  if (rc_sys_state == RC_STATE_WAITING) {
-				  DebugUI_PrintLine(0, "WAITING FOR ELRS...");
-			  } else if (rc_sys_state == RC_STATE_CALIBRATING) {
-				  DebugUI_PrintLine(0, "CALIBRATING STICKS...");
-			  } else if (rc_sys_state == RC_STATE_ERROR) {
-				  DebugUI_PrintLine(0, "! STICK ERROR !");
-				  DebugUI_PrintLine(1, "CENTER STICKS!");
-			  } else if (rc_sys_state == RC_STATE_READY) {
-				  DebugUI_PrintLine(0, "LQ:%d%% %ddBm", crsf.link_quality, crsf.rssi_dbm);
+  // NON-BLOCKING DEBUG UI RENDER (Every 100ms)
+  if (HAL_GetTick() - last_ui_update >= UI_REFRESH_INTERVAL_MS) {
+	if (!SH1107_IsBusy()) {
+		last_ui_update = HAL_GetTick();
+		DebugUI_Clear();
 
-				  // Get perfectly smoothed & safe values
-				  uint16_t thr = RC_GetProcessed(CRSF_MAP_THROTTLE);
-				  uint16_t str = RC_GetProcessed(CRSF_MAP_STEERING);
-				  uint16_t dir = RC_GetProcessed(CRSF_MAP_DIR_SWITCH);
-				  uint16_t rth = RC_GetProcessed(CRSF_MAP_RTH_SWITCH);
+		VehicleState_t current_vehicle_state = MainFSM_GetState();
 
-				  DebugUI_PrintLine(2, "THR: %d", thr);
-				  DebugUI_StickSlider(0, 26, 128, 10, thr);
+		if (current_vehicle_state == STATE_WAITING) {
+			DebugUI_PrintLine(0, "WAITING FOR ELRS...");
+		}
+		else if (current_vehicle_state == VEHICLE_CALIBRATING) {
+			DebugUI_PrintLine(0, "CALIBRATING STICKS...");
+		}
+		else if (current_vehicle_state == STATE_ERROR) {
+			DebugUI_PrintLine(0, "! STICK ERROR !");
+			/* Critical fix: Reflect true TX12 FPV logic on display */
+			DebugUI_PrintLine(2, "CENTER STEERING");
+			DebugUI_PrintLine(4, "AND DROP THROTTLE!");
+		}
+		else if (current_vehicle_state == STATE_READY) {
+			DebugUI_PrintLine(0, "LQ:%d%%  %ddBm", crsf.link_quality, crsf.rssi_dbm);
 
-				  DebugUI_PrintLine(4, "STR: %d", str);
-				  DebugUI_StickSlider(0, 42, 128, 10, str);
+			// Extract perfectly smoothed, filtered and normalized parameters
+			uint16_t thr = MainFSM_GetOutput(CRSF_MAP_THROTTLE);
+			uint16_t str = MainFSM_GetOutput(CRSF_MAP_STEERING);
 
-				  if (dir > 1700) DebugUI_PrintLine(7, "DIR: FORWARD");
-				  else if (dir < 1300) DebugUI_PrintLine(7, "DIR: REVERSE");
-				  else DebugUI_PrintLine(7, "DIR: NEUTRAL");
+			DebugUI_PrintLine(1, "THR: %d", thr);
+			DebugUI_StickSlider(0, 16, 128, 6, thr);
 
-				  if (rth < 1300) DebugUI_PrintLine(9, "RTH: OFF");
-				  else if (rth <= 1700) DebugUI_PrintLine(9, "RTH: DIRECT");
-				  else DebugUI_PrintLine(9, "RTH: BACKTRACE");
-			  }
+			DebugUI_PrintLine(3, "STR: %d", str);
+			DebugUI_StickSlider(0, 32, 128, 6, str);
 
-			  DebugUI_PrintLine(15, "Loop %d max %d", current_loop_us, max_loop_time_us);
+			/* Decode transmission direction from FSM Layer 3 supervisor */
+			DriveDirection_t current_dir = MainFSM_GetDirection();
+			if (current_dir == DIR_FORWARD) {
+				DebugUI_PrintLine(5, "DIR: FORWARD");
+			} else if (current_dir == DIR_REVERSE) {
+				DebugUI_PrintLine(5, "DIR: REVERSE");
+			} else {
+				DebugUI_PrintLine(5, "DIR: NEUTRAL (HOLD)");
+			}
 
-			  DebugUI_Show();
-		  }
-		  max_loop_time_us = 0;
-	  }
+			/* Decode navigation mode from FSM Layer 3 supervisor */
+			DriveMode_t current_mode = MainFSM_GetMode();
+			if (current_mode == MODE_MANUAL) {
+				DebugUI_PrintLine(6, "MODE: MANUAL CONT");
+			} else if (current_mode == MODE_RTH_DIRECT) {
+				DebugUI_PrintLine(6, "MODE: RTH DIRECT");
+			} else {
+				DebugUI_PrintLine(6, "MODE: RTH BACKTRACE");
+			}
+		}
 
-	  // 3. PROFILING (Calculate loop time in microseconds)
-	  current_cycles = DWT->CYCCNT - loop_start_cycle;
-	  current_loop_us = current_cycles / mcu_freq_mhz;
-	  if (current_loop_us > max_loop_time_us) {
-		  max_loop_time_us = current_loop_us;
-	  }
-	  /* USER CODE END 3 */
+		DebugUI_PrintLine(15, "Loop %d max %d", current_loop_us, max_loop_time_us);
+		DebugUI_Show();
+	}
+	max_loop_time_us = 0;
   }
-}
 
+	// PROFILING (Calculate loop time execution in microseconds)
+	current_cycles = DWT->CYCCNT - loop_start_cycle;
+	current_loop_us = current_cycles / mcu_freq_mhz;
+	if (current_loop_us > max_loop_time_us) {
+		max_loop_time_us = current_loop_us;
+	}
+/* USER CODE END 3 */
+}
+}
 /**
   * @brief System Clock Configuration
   * @retval None
