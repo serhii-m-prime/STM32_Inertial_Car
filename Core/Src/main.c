@@ -31,6 +31,9 @@
 #include "debug_ui.h"
 #include "crsf.h"
 #include "main_fsm.h"
+#include "motor.h"
+#include "servo.h"
+#include "rc_input.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -115,6 +118,9 @@ int main(void)
   DebugUI_Init();
   CRSF_Init();
   MainFSM_Init();
+  RC_Input_Init();
+  Motor_Init();
+  Servo_Init();
 
   // Enable DWT Counter for nanosecond precision profiling
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
@@ -134,6 +140,9 @@ while (1)
   // SYSTEM LAYERS TIMESTEP UPDATE
   /* Capture the boolean event flag from the low-level parser */
   bool new_rc_data = CRSF_Update();
+
+  /* Spin DSP filters inside the standalone service layer */
+  RC_Input_Update(new_rc_data);
 
   /* Failsafe timer checker must run continuously without gating */
   CRSF_UpdateFailsafe(HAL_GetTick());
