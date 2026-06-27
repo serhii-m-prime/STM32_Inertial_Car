@@ -18,7 +18,7 @@ void RC_Input_Init(void) {
     Signal_InitFilter(&filters[CRSF_MAP_THROTTLE], 1000, 15, 0.25f, CHAN_BOTTOM_ANCHORED);
 
     /* Configure digital switch channels with zero deadband and direct mapping */
-    Signal_InitFilter(&filters[CRSF_MAP_DIR_SWITCH], 1000, 0, 1.0f, CHAN_BOTTOM_ANCHORED);
+    Signal_InitFilter(&filters[CRSF_MAP_DIR_SWITCH], 150, 0, 1.0f, CHAN_CENTERED);
     Signal_InitFilter(&filters[CRSF_MAP_RTH_SWITCH], 1000, 0, 1.0f, CHAN_BOTTOM_ANCHORED);
 }
 
