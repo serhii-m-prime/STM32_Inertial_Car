@@ -34,6 +34,8 @@
 #include "motor.h"
 #include "servo.h"
 #include "rc_input.h"
+#include "odometry.h"
+#include "imu.h"
 #include "vehicle_config.h"
 #include "config_console.h"
 #include <stdio.h>
@@ -165,6 +167,7 @@ int main(void) {
 	RC_Input_Init();
 	Motor_Init();
 	Servo_Init();
+  Odometry_Init();
 
 	if (app_mode == APP_MODE_CONFIG) {
 		static const uint8_t config_banner[] =
@@ -194,6 +197,11 @@ int main(void) {
 	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
 	uint32_t mcu_freq_mhz = HAL_RCC_GetHCLKFreq() / 1000000;
+  uint32_t last_odom_update = HAL_GetTick();
+
+
+  bool imu_alive = IMU_Init();
+  uint8_t imu_id = IMU_GetWhoAmI();
 
 	/* USER CODE END 2 */
 
@@ -230,6 +238,16 @@ int main(void) {
 		RC_Input_Update(new_rc_data);
 		CRSF_UpdateFailsafe(HAL_GetTick());
 		MainFSM_Update(new_rc_data);
+
+  // HARDWARE ODOMETRY LAYER (Every 20ms = 50Hz)
+  uint32_t now = HAL_GetTick();
+  if (now - last_odom_update >= 20) {
+	  /* Calculate actual time delta in seconds in case of slight jitter */
+	  float dt = (float)(now - last_odom_update) / 1000.0f;
+	  last_odom_update = now;
+
+	  Odometry_Update(dt);
+  }
 
 		if (HAL_GetTick() - last_ui_update >= UI_REFRESH_INTERVAL_MS) {
 			if (!SH1107_IsBusy()) {
@@ -273,7 +291,25 @@ int main(void) {
 						DebugUI_PrintLine(6, "MODE: RTH DIRECT");
 					} else {
 						DebugUI_PrintLine(6, "MODE: RTH BACKTRACE");
-					}
+			}
+			// Speed on weals
+			int spd_L_cm = (int)(Odometry_GetSpeedLeft() * 100.0f);
+			int spd_R_cm = (int)(Odometry_GetSpeedRight() * 100.0f);
+			int dist_L_cm = (int)(Odometry_GetDistanceLeft() * 100.0f);
+			int dist_R_cm = (int)(Odometry_GetDistanceRight() * 100.0f);
+
+			/* Виводимо як звичайні цілі числа (%d) */
+			DebugUI_PrintLine(7, "Spd L:%d  R:%d cm/s", spd_L_cm, spd_R_cm);
+			DebugUI_PrintLine(8, "Dst L:%d  R:%d cm", dist_L_cm, dist_R_cm);
+
+			if (imu_alive) {
+			      DebugUI_PrintLine(9, "IMU: ALIVE!");
+			      DebugUI_PrintLine(10, "ID: 0x%02X (OK)", imu_id);
+			  } else {
+			      DebugUI_PrintLine(9, "IMU: DEAD/ERROR");
+			      DebugUI_PrintLine(10, "ID: 0x%02X", imu_id);
+			      DebugUI_PrintLine(11, "Expected: 0xEA");
+					  }
 				}
 
 				DebugUI_PrintLine(15, "Loop %d max %d", current_loop_us,
