@@ -73,6 +73,8 @@ void Error_Handler(void);
 #define XSHUT_LEFT_GPIO_Port GPIOA
 #define XSHUT_CENTER_Pin GPIO_PIN_12
 #define XSHUT_CENTER_GPIO_Port GPIOA
+#define CONFIG_BUTTON_Pin GPIO_PIN_7
+#define CONFIG_BUTTON_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

@@ -26,5 +26,6 @@ uint16_t RC_GetRawChannel(uint8_t channel_index);
 uint16_t RC_GetFilteredChannel(uint8_t channel_index);
 
 void RC_Input_SetCenter(uint8_t channel_index, uint16_t center_val);
+uint16_t RC_Input_GetCenter(uint8_t channel_index);
 
 #endif /* RC_INPUT_H */

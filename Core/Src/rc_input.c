@@ -1,6 +1,7 @@
 #include "rc_input.h"
 #include "crsf.h"
 #include "signal_processing.h"
+#include "vehicle_config.h"
 
 /* Internal service workspace */
 static ChannelFilter_t filters[16];
@@ -14,8 +15,12 @@ void RC_Input_Init(void) {
     }
 
     /* Configure customized DSP profiles for steering and throttle channels */
-    Signal_InitFilter(&filters[CRSF_MAP_STEERING], 1500, 15, 0.15f, CHAN_CENTERED);
-    Signal_InitFilter(&filters[CRSF_MAP_THROTTLE], 1000, 15, 0.25f, CHAN_BOTTOM_ANCHORED);
+    Signal_InitFilter(&filters[CRSF_MAP_STEERING], 1500,
+                      vehicle_config.steering_deadband_us,
+                      vehicle_config.steering_filter_pct / 100.0f, CHAN_CENTERED);
+    Signal_InitFilter(&filters[CRSF_MAP_THROTTLE], 1000,
+                      vehicle_config.throttle_deadband_us,
+                      vehicle_config.throttle_filter_pct / 100.0f, CHAN_BOTTOM_ANCHORED);
 
     /* Configure digital switch channels with zero deadband and direct mapping */
     Signal_InitFilter(&filters[CRSF_MAP_DIR_SWITCH], 1000, 0, 1.0f, CHAN_BOTTOM_ANCHORED);
@@ -51,4 +56,9 @@ void RC_Input_SetCenter(uint8_t channel_index, uint16_t center_val) {
     /* Flush state memory to the new baseline to prevent filter settling artifacts */
     filters[channel_index].filtered_val = (float)center_val;
     filtered_cache[channel_index] = center_val;
+}
+
+uint16_t RC_Input_GetCenter(uint8_t channel_index) {
+    if (channel_index >= 16) return 1500;
+    return filters[channel_index].center;
 }

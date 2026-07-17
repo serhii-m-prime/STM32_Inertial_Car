@@ -1,5 +1,6 @@
 #include "crsf.h"
 #include "usart.h"
+#include "vehicle_config.h"
 
 #define RX_BUFFER_SIZE 4096
 #define CRSF_MAX_FRAME_SIZE 64
@@ -75,7 +76,8 @@ void CRSF_Init(void) {
 }
 
 void CRSF_UpdateFailsafe(uint32_t current_time_ms) {
-    if (crsf.is_connected && (current_time_ms - crsf.last_valid_frame_time > CRSF_FAILSAFE_TIME)) {
+    if (crsf.is_connected &&
+        (current_time_ms - crsf.last_valid_frame_time > vehicle_config.failsafe_timeout_ms)) {
         crsf.is_connected = false;
         crsf.link_quality = 0;
         crsf.raw_channels[CRSF_MAP_THROTTLE] = 172; // 0

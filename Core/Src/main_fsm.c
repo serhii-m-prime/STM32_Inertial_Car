@@ -7,6 +7,7 @@
 /* USER CODE BEGIN Includes */
 #include "motor.h"
 #include "servo.h"
+#include "vehicle_config.h"
 /* USER CODE END Includes */
 
 #define CALIB_SAMPLES       50
@@ -37,6 +38,29 @@ static uint16_t calib_min[2] = {2000, 2000};
 static uint16_t calib_max[2] = {1000, 1000};
 static uint32_t last_sample_time = 0;
 
+static uint16_t NormalizeSteering(uint16_t value, uint16_t center) {
+    int32_t normalized;
+    if (value >= center) {
+        uint16_t range = 2000U - center;
+        normalized = 1500 + ((int32_t)(value - center) * 500) / (range ? range : 1U);
+    } else {
+        uint16_t range = center - 1000U;
+        normalized = 1500 - ((int32_t)(center - value) * 500) / (range ? range : 1U);
+    }
+    if (normalized < 1000) normalized = 1000;
+    if (normalized > 2000) normalized = 2000;
+    return (uint16_t)normalized;
+}
+
+static uint16_t NormalizeThrottle(uint16_t value, uint16_t zero) {
+    if (value <= zero) return 1000;
+    uint16_t range = 2000U - zero;
+    int32_t normalized = 1000 + ((int32_t)(value - zero) * 1000) /
+            (range ? range : 1U);
+    if (normalized > 2000) normalized = 2000;
+    return (uint16_t)normalized;
+}
+
 void MainFSM_Init(void) {
     current_state = STATE_WAITING;
     current_mode = MODE_MANUAL;
@@ -50,9 +74,9 @@ void MainFSM_Init(void) {
 static void MainFSM_ProcessSubStates(void) {
     // Process Transmission Direction Switch (DIR)
     uint16_t dir_pwm = RC_GetFilteredChannel(CRSF_MAP_DIR_SWITCH);
-    if (dir_pwm > SWITCH_HIGH_THRESHOLD) {
+    if (dir_pwm > vehicle_config.switch_high_us) {
         current_direction = DIR_FORWARD;
-    } else if (dir_pwm < SWITCH_LOW_THRESHOLD) {
+    } else if (dir_pwm < vehicle_config.switch_low_us) {
         current_direction = DIR_REVERSE;
     } else {
         current_direction = DIR_NEUTRAL;
@@ -60,9 +84,9 @@ static void MainFSM_ProcessSubStates(void) {
 
     // Process Return-To-Home Autopilot Switch (RTH)
     uint16_t rth_pwm = RC_GetFilteredChannel(CRSF_MAP_RTH_SWITCH);
-    if (rth_pwm < SWITCH_LOW_THRESHOLD) {
+    if (rth_pwm < vehicle_config.switch_low_us) {
         current_mode = MODE_MANUAL;
-    } else if (rth_pwm <= SWITCH_HIGH_THRESHOLD) {
+    } else if (rth_pwm <= vehicle_config.switch_high_us) {
         current_mode = MODE_RTH_DIRECT;
     } else {
         current_mode = MODE_RTH_BACKTRACE;
@@ -84,7 +108,7 @@ void MainFSM_Update(bool new_frame) {
 
         /* Hardware interlock safety override: force stop actuators instantly */
         Motor_SetPower(0, 0);
-        Servo_SetPulse(1500);
+        Servo_Center();
         return;
     }
 
@@ -121,8 +145,8 @@ void MainFSM_Update(bool new_frame) {
                     uint16_t str_avg = calib_sum[0] / CALIB_SAMPLES;
                     uint16_t thr_avg = calib_sum[1] / CALIB_SAMPLES;
 
-                    bool is_stable = (calib_max[0] - calib_min[0] < ALLOWED_JITTER) &&
-                                     (calib_max[1] - calib_min[1] < ALLOWED_JITTER);
+                    bool is_stable = (calib_max[0] - calib_min[0] < vehicle_config.calibration_max_jitter_us) &&
+                                     (calib_max[1] - calib_min[1] < vehicle_config.calibration_max_jitter_us);
 
                     bool is_str_centered = (str_avg > SAFE_CENTER_MIN && str_avg < SAFE_CENTER_MAX);
                     bool is_thr_bottomed = (thr_avg > SAFE_BOTTOM_MIN && thr_avg < SAFE_BOTTOM_MAX);
@@ -158,12 +182,16 @@ void MainFSM_Update(bool new_frame) {
 
 				if (current_mode == MODE_MANUAL) {
 					/* Cache smooth control commands directly into buffer workspace */
-					output_steering = RC_GetFilteredChannel(CRSF_MAP_STEERING);
+					output_steering = NormalizeSteering(
+							RC_GetFilteredChannel(CRSF_MAP_STEERING),
+							RC_Input_GetCenter(CRSF_MAP_STEERING));
 
 					if (current_direction == DIR_NEUTRAL) {
 						output_throttle = 1000; /* Electronic transmission lock active */
 					} else {
-						output_throttle = RC_GetFilteredChannel(CRSF_MAP_THROTTLE);
+						output_throttle = NormalizeThrottle(
+								RC_GetFilteredChannel(CRSF_MAP_THROTTLE),
+								RC_Input_GetCenter(CRSF_MAP_THROTTLE));
 					}
 				} else {
 					/* Autonomous navigation algorithms (RTH_DIRECT / RTH_BACKTRACE) will be injected here */
@@ -187,13 +215,17 @@ void MainFSM_Update(bool new_frame) {
 
     /* 2. Execute mathematical normalization to scale microseconds down to hardware timer ARR bounds */
     int32_t baseline_gas = (int32_t)output_throttle - 1000;
-    int32_t target_pwm = (baseline_gas * 4999) / 1000;
+    uint8_t direction_limit = (current_direction == DIR_REVERSE) ?
+            vehicle_config.reverse_power_pct : vehicle_config.forward_power_pct;
+    int32_t target_pwm = (baseline_gas * 4999 * direction_limit) / 100000;
+    int32_t left_pwm = (target_pwm * vehicle_config.left_motor_pct) / 100;
+    int32_t right_pwm = (target_pwm * vehicle_config.right_motor_pct) / 100;
 
     /* 3. Evaluate selected transmission gear and drive low-level PWM registers */
     if (current_direction == DIR_FORWARD) {
-        Motor_SetPower((int16_t)target_pwm, (int16_t)target_pwm);
+        Motor_SetPower((int16_t)left_pwm, (int16_t)right_pwm);
     } else if (current_direction == DIR_REVERSE) {
-        Motor_SetPower(-(int16_t)target_pwm, -(int16_t)target_pwm);
+        Motor_SetPower(-(int16_t)left_pwm, -(int16_t)right_pwm);
     } else {
         Motor_SetPower(0, 0); /* Force complete motor short-brake torque */
     }
